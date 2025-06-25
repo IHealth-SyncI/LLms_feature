@@ -1,15 +1,18 @@
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from langchain.prompts import PromptTemplate
-from langchain.llms import OpenAI
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 import os
+from psycopg2.extras import RealDictCursor
 import datetime
 
+import torch
+from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
+from langchain.llms.huggingface_pipeline import HuggingFacePipeline
+
 # --- Configuration ---
-DB_URI = os.getenv("DB_URI", "postgresql://user:password@localhost:5432/medical_db")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "sk-...")
+DB_URI = os.getenv("DB_URI", "postgresql://healthsync:healthsyncpass@localhost:5432/healthsync_db")
+# OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "sk-...")
 
 
 # --- Database Connection ---
@@ -56,6 +59,40 @@ def fetch_patient_demographics(conn, patient_id):
             "category": result["Category"],
         }
 
+# def fetch_patient_demographics(conn, patient_id):
+#     """
+#     Fetch patient name, age, gender, and category from AspNetUsers and Patients tables.
+#     """
+#     query = """
+#         SELECT u."Id", u."UserName", u."DOB", u."Gender", p."Category"
+#         FROM "AspNetUsers" u
+#         JOIN "Patients" p ON u."Id" = p."Patient_ID"
+#         WHERE p."Patient_ID" = %s
+#     """
+#     with conn.cursor(cursor_factory=RealDictCursor) as cur:
+#         cur.execute(query, (patient_id,))
+#         result = cur.fetchone()
+#         if not result:
+#             return None
+#
+#         # Calculate age
+#         dob = result.get("DOB")
+#         age = None
+#         if dob:
+#             today = datetime.date.today()
+#             age = (
+#                 today.year
+#                 - dob.year
+#                 - ((today.month, today.day) < (dob.month, dob.day))
+#             )
+#
+#         return {
+#             "id": result["Id"],
+#             "name": result["UserName"],
+#             "age": age,
+#             "gender": result["Gender"],
+#             "category": result["Category"],
+#         }
 
 def fetch_medical_history(conn, patient_id):
     """
@@ -244,8 +281,12 @@ def generate_patient_report(patient_id):
             lab_results,
         )
 
+        llm = HuggingFacePipeline.from_model_id(
+            model_id="deepseek - ai / DeepSeek - R1 - 0528", task="text-generation",
+            pipeline_kwargs={"max_new_tokens": 200, "pad_token_id": 50256},
+        )
         # Generate report text using LLM
-        llm = OpenAI(openai_api_key=OPENAI_API_KEY, temperature=0.2)
+        # llm = OpenAI(openai_api_key=OPENAI_API_KEY, temperature=0.2)
         report_text = llm(prompt)
 
         # Generate PDF
@@ -256,6 +297,80 @@ def generate_patient_report(patient_id):
     finally:
         conn.close()
 
+# def generate_patient_report(patient_id):
+#     """
+#     Orchestrate the workflow: fetch data, generate report, and save as PDF.
+#     Uses local DeepSeek-R1 7B model instead of OpenAI.
+#     """
+#     conn = get_db_connection()
+#     if not conn:
+#         print("Failed to connect to the database.")
+#         return
+#     try:
+#         # Fetch data
+#         demographics = fetch_patient_demographics(conn, patient_id)
+#         if not demographics:
+#             print(f"No patient found with ID {patient_id}.")
+#             return
+#         medical_history = fetch_medical_history(conn, patient_id)
+#         visits_summary = fetch_recent_visits(conn, patient_id)
+#         lab_results = fetch_lab_results(conn, patient_id)
+#
+#
+#
+#         # Prepare prompt
+#         prompt = generate_llm_prompt(
+#             demographics["name"],
+#             demographics["age"],
+#             demographics["gender"],
+#             medical_history,
+#             visits_summary,
+#             lab_results,
+#         )
+#
+#         # Load local DeepSeek model (cache after first load)
+#         model_path = "./deepseek-r1-7b"  # Update with your actual path
+#         tokenizer = AutoTokenizer.from_pretrained(model_path)
+#         model = AutoModelForCausalLM.from_pretrained(
+#             model_path,
+#             device_map="auto",
+#             torch_dtype=torch.bfloat16,  # Better precision than float16
+#             low_cpu_mem_usage=True
+#         )
+#
+#         # Create text generation pipeline
+#         # pipe = pipeline(
+#         #     "text-generation",
+#         #     model=model,
+#         #     tokenizer=tokenizer,
+#         #     max_new_tokens=1024,  # Control response length
+#         #     temperature=0.3,  # Slightly higher for creativity
+#         #     do_sample=True,
+#         #     top_p=0.9,
+#         #     repetition_penalty=1.05  # Reduce repetition
+#         # )
+#
+#         hf = HuggingFacePipeline.from_model_id(
+#             model_id="deepseek-r1-7b", task="text-generation",
+#             pipeline_kwargs={"max_new_tokens": 200, "pad_token_id": 50256},
+#         )
+#
+#         # Generate report text
+#         # llm = HuggingFacePipeline(pipeline=pipe)
+#         full_response = llm(prompt)
+#
+#         # Extract only the assistant's response
+#         report_text = full_response.split("Assistant:")[-1].strip()
+#
+#         # Generate PDF
+#         pdf_filename = generate_pdf_report(patient_id, report_text)
+#         print(f"Report generated: {pdf_filename}")
+#     except Exception as e:
+#         print(f"Error generating report: {e}")
+#         import traceback
+#         traceback.print_exc()
+#     finally:
+#         conn.close()
 
 if __name__ == "__main__":
     # Example usage
