@@ -11,7 +11,9 @@ from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
 from langchain.llms.huggingface_pipeline import HuggingFacePipeline
 
 # --- Configuration ---
-DB_URI = os.getenv("DB_URI", "postgresql://healthsync:healthsyncpass@localhost:5432/healthsync_db")
+DB_URI = os.getenv(
+    "DB_URI", "postgresql://healthsync:healthsyncpass@localhost:5432/healthsync_db"
+)
 # OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "sk-...")
 
 
@@ -59,6 +61,7 @@ def fetch_patient_demographics(conn, patient_id):
             "category": result["Category"],
         }
 
+
 # def fetch_patient_demographics(conn, patient_id):
 #     """
 #     Fetch patient name, age, gender, and category from AspNetUsers and Patients tables.
@@ -93,6 +96,7 @@ def fetch_patient_demographics(conn, patient_id):
 #             "gender": result["Gender"],
 #             "category": result["Category"],
 #         }
+
 
 def fetch_medical_history(conn, patient_id):
     """
@@ -240,11 +244,25 @@ def generate_pdf_report(patient_id, report_text):
 
     # Report Body
     c.setFont("Helvetica", 12)
-    for line in report_text.split("\n"):
+
+    # Validate report_text
+    if not report_text:
+        report_text = "No report content available."
+
+    # Split text into lines and handle empty lines
+    lines = report_text.split("\n") if report_text else ["No content available"]
+
+    for line in lines:
         if y < margin + 20:
             c.showPage()
             y = height - margin
             c.setFont("Helvetica", 12)
+
+        # Handle empty lines
+        if not line.strip():
+            y -= 8  # Smaller spacing for empty lines
+            continue
+
         c.drawString(margin, y, line)
         y -= 16
 
@@ -282,8 +300,8 @@ def generate_patient_report(patient_id):
         )
 
         llm = HuggingFacePipeline.from_model_id(
-            model_id="deepseek - ai / DeepSeek - R1 - 0528", task="text-generation",
-            pipeline_kwargs={"max_new_tokens": 200, "pad_token_id": 50256},
+            model_id="openai-community/gpt2",
+            task="text-generation"
         )
         # Generate report text using LLM
         # llm = OpenAI(openai_api_key=OPENAI_API_KEY, temperature=0.2)
@@ -294,8 +312,12 @@ def generate_patient_report(patient_id):
         print(f"Report generated: {pdf_filename}")
     except Exception as e:
         print(f"Error generating report: {e}")
+        import traceback
+
+        traceback.print_exc()
     finally:
         conn.close()
+
 
 # def generate_patient_report(patient_id):
 #     """
