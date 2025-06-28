@@ -321,7 +321,8 @@ def generate_patient_report(patient_id):
 
         # === Use Ollama model ===
         llm =  OllamaLLM(
-            model="deepseek-r1:7b",
+            # model="deepseek-r1:7b",
+            model="deepseek-r1:1.5b",
             temperature=0.2,
             base_url="http://localhost:11434",  # default port
             # Optional tuning parameters:
