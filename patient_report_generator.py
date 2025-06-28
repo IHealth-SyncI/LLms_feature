@@ -300,7 +300,7 @@ def generate_patient_report(patient_id):
         )
 
         llm = HuggingFacePipeline.from_model_id(
-            model_id="openai-community/gpt2",
+            model_id="foundationmodels/MIMIC-medical-report",
             task="text-generation"
         )
         # Generate report text using LLM
