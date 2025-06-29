@@ -6,18 +6,14 @@ from reportlab.pdfgen import canvas
 import os
 import re
 from psycopg2.extras import RealDictCursor
-import datetime
-import torch
-from langchain_community.llms import HuggingFacePipeline
-from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
-from langchain.llms import HuggingFacePipeline
 from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import inch
 import datetime
 import markdown
 from bs4 import BeautifulSoup
+from llm_utils import get_llm_instance
 
 # --- Configuration ---
 DB_URI = os.getenv(
@@ -69,42 +65,6 @@ def fetch_patient_demographics(conn, patient_id):
             "gender": result["Gender"],
             "category": result["Category"],
         }
-
-
-# def fetch_patient_demographics(conn, patient_id):
-#     """
-#     Fetch patient name, age, gender, and category from AspNetUsers and Patients tables.
-#     """
-#     query = """
-#         SELECT u."Id", u."UserName", u."DOB", u."Gender", p."Category"
-#         FROM "AspNetUsers" u
-#         JOIN "Patients" p ON u."Id" = p."Patient_ID"
-#         WHERE p."Patient_ID" = %s
-#     """
-#     with conn.cursor(cursor_factory=RealDictCursor) as cur:
-#         cur.execute(query, (patient_id,))
-#         result = cur.fetchone()
-#         if not result:
-#             return None
-#
-#         # Calculate age
-#         dob = result.get("DOB")
-#         age = None
-#         if dob:
-#             today = datetime.date.today()
-#             age = (
-#                 today.year
-#                 - dob.year
-#                 - ((today.month, today.day) < (dob.month, dob.day))
-#             )
-#
-#         return {
-#             "id": result["Id"],
-#             "name": result["UserName"],
-#             "age": age,
-#             "gender": result["Gender"],
-#             "category": result["Category"],
-#         }
 
 
 def fetch_medical_history(conn, patient_id):
@@ -202,7 +162,7 @@ def fetch_lab_results(conn, patient_id, limit=10):
 # --- LLM Prompt Template ---
 # --- LLM Prompt Template ---
 def generate_llm_prompt(
-        patient_name, age, gender, medical_history, visits_summary, lab_results
+    patient_name, age, gender, medical_history, visits_summary, lab_results
 ):
     """
     Generate a structured prompt for the LLM to create a professional medical report.
@@ -247,40 +207,56 @@ def generate_pdf_report(patient_id, md_report_text):
     html = markdown.markdown(md_report_text)
 
     # Parse HTML to extract structured content
-    soup = BeautifulSoup(html, 'html.parser')
+    soup = BeautifulSoup(html, "html.parser")
 
     # Create PDF document
     doc = SimpleDocTemplate(filename, pagesize=letter)
     styles = getSampleStyleSheet()
 
     # Modify existing styles
-    styles['Title'].fontSize = 18
-    styles['Title'].spaceAfter = 24
-    styles['Heading1'].fontSize = 16
-    styles['Heading1'].spaceAfter = 12
-    styles['Heading2'].fontSize = 14
-    styles['Heading2'].spaceAfter = 10
+    styles["Title"].fontSize = 18
+    styles["Title"].spaceAfter = 24
+    styles["Heading1"].fontSize = 16
+    styles["Heading1"].spaceAfter = 12
+    styles["Heading2"].fontSize = 14
+    styles["Heading2"].spaceAfter = 10
 
     story = []
 
     # Add title and metadata
-    story.append(Paragraph("MEDICAL REPORT", styles['Title']))
-    story.append(Paragraph(f"Report Date: {datetime.datetime.now().strftime('%Y-%m-%d')}", styles['Normal']))
+    story.append(Paragraph("MEDICAL REPORT", styles["Title"]))
+    story.append(
+        Paragraph(
+            f"Report Date: {datetime.datetime.now().strftime('%Y-%m-%d')}",
+            styles["Normal"],
+        )
+    )
     story.append(Spacer(1, 0.5 * inch))
 
     # Process only the relevant sections
     current_section = None
     for element in soup.find_all(recursive=False):
-        if element.name in ['h1', 'h2']:
+        if element.name in ["h1", "h2"]:
             current_section = element.get_text().lower()
-            if current_section not in ['assessment & recommendations', 'treatment plan']:
-                story.append(Paragraph(element.get_text(), styles[f'Heading{1 if element.name == "h1" else 2}']))
-        elif element.name in ['p', 'ul'] and current_section not in ['assessment & recommendations', 'treatment plan']:
-            if element.name == 'ul':
-                for li in element.find_all('li'):
-                    story.append(Paragraph(f"• {li.get_text()}", styles['Normal']))
+            if current_section not in [
+                "assessment & recommendations",
+                "treatment plan",
+            ]:
+                story.append(
+                    Paragraph(
+                        element.get_text(),
+                        styles[f'Heading{1 if element.name == "h1" else 2}'],
+                    )
+                )
+        elif element.name in ["p", "ul"] and current_section not in [
+            "assessment & recommendations",
+            "treatment plan",
+        ]:
+            if element.name == "ul":
+                for li in element.find_all("li"):
+                    story.append(Paragraph(f"• {li.get_text()}", styles["Normal"]))
             else:
-                story.append(Paragraph(element.get_text(), styles['Normal']))
+                story.append(Paragraph(element.get_text(), styles["Normal"]))
             story.append(Spacer(1, 0.2 * inch))
 
     doc.build(story)
@@ -320,15 +296,7 @@ def generate_patient_report(patient_id):
         )
 
         # === Use Ollama model ===
-        llm =  OllamaLLM(
-            # model="deepseek-r1:7b",
-            model="deepseek-r1:1.5b",
-            temperature=0.2,
-            base_url="http://localhost:11434",  # default port
-            # Optional tuning parameters:
-            top_p=0.95,
-            max_tokens=1024,
-        )
+        llm = get_llm_instance()
 
         # Generate report text using LLM
         report_text = llm.invoke(prompt)
@@ -344,6 +312,7 @@ def generate_patient_report(patient_id):
     except Exception as e:
         print(f"Error generating report: {e}")
         import traceback
+
         traceback.print_exc()
 
     finally:
@@ -353,5 +322,5 @@ def generate_patient_report(patient_id):
 if __name__ == "__main__":
     # Example usage
     # pid = input("Enter patient ID: ")
-    print("Patient 1 Reporrt:")
-    generate_patient_report('patient1')
+    print("Patient 1 Report:")
+    generate_patient_report("patient1")
