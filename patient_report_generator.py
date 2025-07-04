@@ -167,29 +167,85 @@ def generate_llm_prompt(
     """
     Generate a structured prompt for the LLM to create a professional medical report.
     """
+    # template = (
+    #     "Generate a professional medical report in Markdown format for {patient_name} ({age}, {gender}) "
+    #     "with the following structure:\n\n"
+    #     "# Medical Report\n\n"
+    #     "## Patient Information\n"
+    #     "- **Name**: {patient_name}\n"
+    #     "- **Age**: {age}\n"
+    #     "- **Gender**: {gender}\n\n"
+    #     "## Medical History\n"
+    #     "{medical_history}\n\n"
+    #     "## Recent Visits Summary(Not in table but in well organized way)\n"
+    #     "{visits_summary}\n\n"
+    #     "## Lab Results\n"
+    #     "{lab_results}\n\n"
+    #     "## Assessment & Recommendations\n"
+    #     "[LLM should generate this section with detailed analysis]\n\n"
+    #     "## Treatment Plan\n"
+    #     "[LLM should generate this section with specific recommendations]"
+    # )
     template = (
-        "Generate a professional medical report in Markdown format for {patient_name} ({age}, {gender}) "
-        "with the following structure:\n\n"
-        "# Medical Report\n\n"
-        "## Patient Information\n"
-        "- **Name**: {patient_name}\n"
-        "- **Age**: {age}\n"
-        "- **Gender**: {gender}\n\n"
-        "## Medical History\n"
+        "Generate a comprehensive, professional medical report in Markdown format for {patient_name} "
+        "({age} years old, {gender}). The report should be well-structured, readable, and clinically appropriate.\n\n"
+
+        "# 🩺 Medical Report\n\n"
+
+        "## 1. Patient Profile\n"
+        "- **Full Name**: {patient_name}\n"
+        "- **Age**: {age} years\n"
+        "- **Gender**: {gender}\n"
+
+        "## 2. Medical History\n"
+        "Provide a concise yet comprehensive summary of the patient's past and ongoing medical conditions. "
+        "Include chronic diseases, surgeries, allergies, medications, and relevant family history.\n\n"
         "{medical_history}\n\n"
-        "## Recent Visits Summary\n"
+
+        "## 3. Summary of Recent Visits\n"
+        "Summarize the most recent clinical encounters (e.g., consultations, hospital visits, telemedicine). "
+        "Mention the date, purpose, symptoms presented, clinical findings, and any actions taken (e.g., medications prescribed, tests ordered).\n\n"
         "{visits_summary}\n\n"
-        "## Lab Results\n"
+
+        "## 4. Laboratory & Diagnostic Results\n"
+        "Present the key lab results or imaging findings. Focus on abnormal values or those relevant to current complaints. "
+        "Group results by test category (e.g., Blood Work, Imaging, etc.) if possible.\n\n"
         "{lab_results}\n\n"
-        "## Assessment & Recommendations\n"
-        "[LLM should generate this section with detailed analysis]\n\n"
-        "## Treatment Plan\n"
-        "[LLM should generate this section with specific recommendations]"
+
+        "## 5. Clinical Assessment\n"
+        "**[LLM should generate this section.]**\n"
+        "Based on the patient's history, recent visits, and test results, provide a clinical interpretation. "
+        "Mention possible diagnoses, the severity of the condition(s), and any trends (e.g., worsening, improving).\n\n"
+
+        "## 6. Recommendations\n"
+        "**[LLM should generate this section.]**\n"
+        "Offer personalized medical recommendations, lifestyle advice, and suggestions for further testing or follow-up.\n\n"
+
+        "## 7. Treatment & Management Plan\n"
+        "**[LLM should generate this section.]**\n"
+        "List specific treatments prescribed (medications, therapies), dosages if known, and expected outcomes. "
+        "Include both short-term interventions and long-term management strategies.\n\n"
+
+        "---\n"
+        "Note: Don't use tables anywhere in the response just show the response in well organized way"
     )
+
+    # return template.format(
+    #     patient_name=patient_name,
+    #     age=age,
+    #     gender=gender,
+    #     medical_history=medical_history,
+    #     visits_summary=visits_summary,
+    #     lab_results=lab_results,
+    # )
+
+
+    # report_date = datetime.today().strftime('%Y-%m-%d')
     return template.format(
         patient_name=patient_name,
         age=age,
         gender=gender,
+        # report_date=report_date,
         medical_history=medical_history,
         visits_summary=visits_summary,
         lab_results=lab_results,
@@ -290,6 +346,7 @@ def generate_patient_report(patient_id):
             demographics["name"],
             demographics["age"],
             demographics["gender"],
+            # datetime.today().strftime('%Y-%m-%d'),
             medical_history,
             visits_summary,
             lab_results,
